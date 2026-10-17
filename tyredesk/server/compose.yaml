@@ -1,0 +1,21 @@
+services:
+  hbbs:
+    image: rustdesk/rustdesk-server:1.1.16
+    command: ["hbbs", "-r", "${TYREDESK_PUBLIC_HOST:?Defina o IP ou DNS publico}:21117", "-k", "_"]
+    restart: unless-stopped
+    ports:
+      - "21115:21115/tcp"
+      - "21116:21116/tcp"
+      - "21116:21116/udp"
+    volumes:
+      - ./data:/root
+  hbbr:
+    image: rustdesk/rustdesk-server:1.1.16
+    command: ["hbbr", "-k", "_"]
+    restart: unless-stopped
+    depends_on:
+      - hbbs
+    ports:
+      - "21117:21117/tcp"
+    volumes:
+      - ./data:/root

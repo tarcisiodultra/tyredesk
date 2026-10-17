@@ -1,0 +1,17 @@
+TyreDesk - Tyresoles
+
+1. Abra TyreDesk.exe em cada computador.
+2. No computador que recebera acesso, clique em Definir senha e cadastre
+   uma senha fixa. Voce pode configurar a mesma senha em varios computadores.
+3. No outro computador, informe o ID e a senha. Nao ha login nem pedido de aceite.
+4. Nos computadores recentes, use o menu do cartao para adicionar aos favoritos
+   e definir um nome. Os favoritos ficam salvos localmente.
+5. Para acesso apos reiniciar, use Instalar e autorize a instalacao do servico
+   Windows. Sem instalacao, mantenha o aplicativo aberto.
+
+O computador remoto deve estar ligado e conectado a internet.
+O cliente tenta conexao direta automaticamente e usa relay se necessario.
+Configuracoes > Rede permite ajustar o servidor e sua chave publica.
+Essa chave autentica o servidor: nao e uma chave paga de ativacao.
+
+TyreDesk usa a base aberta RustDesk. Consulte LICENCE e SOURCE-NOTICE.txt.

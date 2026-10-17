@@ -1,0 +1,123 @@
+name: TyreDesk Windows
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      server_mode:
+        description: 'Servidor de conexão do TyreDesk'
+        required: true
+        default: 'public'
+        type: choice
+        options:
+          - public
+          - custom
+      server:
+        description: 'IPv4 ou DNS do servidor OSS; deixe vazio no modo public'
+        required: false
+        default: ''
+        type: string
+      server_key:
+        description: 'Conteúdo de id_ed25519.pub; deixe vazio no modo public'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TYREDESK_SERVER_MODE: ${{ inputs.server_mode }}
+  TYREDESK_SERVER: ${{ inputs.server_mode == 'custom' && inputs.server || '' }}
+  TYREDESK_SERVER_KEY: ${{ inputs.server_mode == 'custom' && inputs.server_key || '' }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          submodules: recursive
+      - run: python3 tyredesk/configure.py --check
+      - run: python3 -m unittest discover -s tyredesk -p 'test_*.py' -v
+      - name: Archive corresponding modified source including submodules
+        run: tar --exclude='.git' --exclude='./dist' --exclude='./tyredesk/server/data' --exclude='build.env.json' --exclude='.env' -czf "$RUNNER_TEMP/TyreDesk-source.tar.gz" .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: TyreDesk-source
+          path: ${{ runner.temp }}/TyreDesk-source.tar.gz
+
+  bridge:
+    needs: validate
+    uses: ./.github/workflows/tyredesk-bridge.yml
+
+  windows:
+    needs: [validate, bridge]
+    runs-on: windows-2022
+    env:
+      VCPKG_BINARY_SOURCES: 'clear;x-gha,readwrite'
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          submodules: recursive
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: bridge-artifact
+          path: ./
+      - uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0
+        with:
+          version: '15.0.6'
+      - uses: subosito/flutter-action@2783a3f08e1baf891508463f8c6653c258246225
+        id: flutter
+        with:
+          channel: stable
+          flutter-version: '3.24.5'
+          architecture: x64
+      - name: Prepare upstream Flutter engine and dropdown patch
+        shell: pwsh
+        run: |
+          flutter precache --windows
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter precache failed' }
+          $flutterRoot = Split-Path -Parent (Split-Path -Parent (Get-Command flutter).Source)
+          Invoke-WebRequest -Uri https://github.com/rustdesk/engine/releases/download/main/windows-x64-release.zip -OutFile windows-x64-release.zip
+          Expand-Archive -LiteralPath windows-x64-release.zip -DestinationPath windows-x64-release
+          Copy-Item -Path windows-x64-release/* -Destination "$flutterRoot/bin/cache/artifacts/engine/windows-x64-release/" -Recurse -Force
+          git -C "$flutterRoot" apply "$env:GITHUB_WORKSPACE/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff"
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter patch failed' }
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        with:
+          toolchain: '1.75'
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
+        with:
+          prefix-key: tyredesk-windows
+      - uses: actions/github-script@d7906e4ad0b1822421a7e6a35d5ca353c962f410
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+      - uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: '9e593bb18ea69cc5095e012465dcd675a822ed0d'
+          doNotCache: false
+      - name: Install native dependencies
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          & "$env:VCPKG_ROOT/vcpkg.exe" install --triplet x64-windows-static "--x-install-root=$env:VCPKG_ROOT/installed"
+          if ($LASTEXITCODE -ne 0) { throw 'vcpkg failed' }
+      - name: Check TyreDesk authentication policy
+        run: cargo test --locked --lib --features flutter tyredesk::tests -- --test-threads=1
+      - name: Build and package
+        shell: pwsh
+        run: ./tyredesk/build-windows.ps1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: TyreDesk-windows-x64
+          path: dist/*
+          if-no-files-found: error

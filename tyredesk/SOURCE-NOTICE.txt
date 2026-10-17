@@ -1,0 +1,13 @@
+TyreDesk is a modified distribution of RustDesk 1.5.0.
+Upstream: https://github.com/rustdesk/rustdesk
+Upstream commit: fada664df7a294d1d1a9ca3e7cd3637069122f17
+Modifications: Tyresoles branding and unattended-access defaults.
+
+RustDesk copyright notices and the GNU Affero General Public License in
+LICENCE are retained. TyreDesk has no paid activation or subscription.
+Third-party dependencies retain their respective licenses.
+
+Distribute the corresponding modified source with these binaries. The
+TyreDesk Windows workflow produces TyreDesk-source.tar.gz alongside the
+binary artifacts, including the hbb_common submodule and build instructions.
+Keep that source archive available to recipients and remote users.
